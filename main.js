@@ -1,2 +1,3 @@
-require('./lib/api')
+'use strict'
+require('./index.js')
 api.start()

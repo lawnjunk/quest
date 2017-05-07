@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "NODE_ENV='TESTING' ./node_modules/mocha/bin/mocha lib/api.js"
+    "test": "NODE_ENV='TESTING' ./node_modules/mocha/bin/mocha ./index.js"
   },
   "keywords": [],
   "author": "",
@@ -13,6 +13,7 @@
     "colors": "^1.1.2",
     "cors": "^2.8.3",
     "debug": "^2.6.6",
+    "dotenv": "^4.0.0",
     "expect": "^1.20.2",
     "express": "^4.15.2",
     "mocha": "^3.3.0",

@@ -10,27 +10,25 @@
 //
 //  IDEAS
 //    * add store postHook that percists to a db
-
+//
 // load env
 // import dependencies
-//
-// DEP TREE
-// |mocks
-// |  |util
-// |  | |f
-// |api
-// |  |f
-// |  |util
-// |  | |f
-// |  |realtime
-// |    |task
-//        | ipsum
-//        |  | f
-// |      |f
-// |      |store
-// |        |f
-// |main
-// |  |util
+// define modules
+// * f
+// * util
+// * store 
+// * ipsum 
+// * world 
+// * router
+// * api
+// export api
+// test modules
+// * mock 
+// tests 
+
+// %% load env
+require('dotenv').config()
+
 // %% deps
 crypto = require('crypto')
 cors = require('cors')
@@ -48,25 +46,25 @@ f = (() => {
   let compose = (a, b) => (...args) => a(b(...args))
   let partial = (cb, ...data) => (...args) =>
     cb.apply(null, [...data].concat([...args]))
-  reducerCreate = name =>
-  (l, ...args) => Array.prototype[name].apply(l, [...args])
-  reducers = ['map', 'filter', 'reduce', 'concat', 'slice', 'forEach']
+  let reducerCreate = name =>
+    (l, ...args) => Array.prototype[name].apply(l, [...args])
+  let reducers = ['map', 'filter', 'reduce', 'concat', 'slice', 'forEach']
   let { map, filter, reduce, concat, slice , forEach} =
     reducers.reduce((p, n) => (p[n] = reducerCreate(n)) && p, {})
-  each = compose(() => true, forEach)
-  list = (n, cb) => map(new Array(n).fill(null), cb)
-  go = (...list) => reduce([...list], (prev, cb) => cb(), null)
+  let each = compose(() => true, forEach)
+  let list = (n, cb) => map(new Array(n).fill(null), cb)
+  let go = (...list) => reduce([...list], (prev, cb) => cb(), null)
   return { map, filter, reduce, concat, slice, compose, partial, forEach, each, list, go}
 })()
 
-// %%UTIL
+// %% util
 util = (() => {
   let safely = (cb) => { try{return cb() } catch(e){} }
   let hash = () => crypto.randomBytes(8).toString('hex')
   let randomBelow = (num) => Math.floor(Math.random() * num)
   let random = (offset, scale) =>
   f.compose(num => num + offset, f.partial(randomBelow, scale - offset))()
-  let log_count = 0
+  let log_count = 1
   let log_isStop = true
   let log_cache = console.time('start')
   let log_start = (arg) =>{
@@ -77,13 +75,13 @@ util = (() => {
     log_isStop = true
     log_cache = console.timeEnd(log_count - 1)
   }
-  let log = (...arg) =>{
+  let log = (...args) =>{
+    process.stdout.write(['=='.green, ...args, '== '.green].join(' '))
     log_stop()
-    console.log('=='.green, ...arg, '=='.green)
     log_start()
   }
-  console.time(-1)
-  safely(() => log('log start'))
+  console.time(log_count - 1)
+  log('log start')
   return {log, safely, hash, random}
 })()
 util.request = (client, path, body) =>{
@@ -105,23 +103,6 @@ util.request = (client, path, body) =>{
     client.emit(path, body)
   })
 }
-
-// %% mocks
-mock = (() => {
-  let socket = () => {
-    return new Promise((data, err) => {
-      let PORT = process.env.PORT || 7000
-      let c = socketioClient('http://localhost:' + PORT)
-      c.on('/r/connect', (d) => {
-        data(c)
-        console.log('d', d)
-      })
-      c.on('error', () => err(c))
-    })
-  }
-
-  return {socket}
-})()
 
 // %% store
 store = (() => {
@@ -184,20 +165,21 @@ router = (() =>{
   let routes = { }
   let on = (path, cb) => (routes[path] = cb )
   let initConnection = (s) => {
-    util.log('initConnection')
+    util.log('initConnection', routes)
     store.updateState(past =>({
       connections: f.concat(past.connections, [s])}))
       s.state = {id: util.hash()}
       for(let path in routes){
+        let cb = routes[path]
+        util.log('adding on', path, 'to', s.state.id)
         s.on(path, (...args) => {
-          let result = routes[path](s, ...args)
+          let result = cb(s, ...args)
           s.emit(path.replace('/q/', '/r/'), result)
-          util.log(path, result)
         })
       }
       s.emit('/r/connect', s.state)
   }
-      return {on, initConnection}
+  return {on, initConnection}
 })()
 router.on('/q/read/world', (s) => {
   if(s.state.world) return {status: 200, data: s.state.world}
@@ -213,9 +195,9 @@ router.on('/q/update/world', (s, data) => {
   return {status: 400}
 })
 
-// %%API
-api = (() => {
-  let PORT = process.env.PORT || 7000
+// %% api
+api = module.exports = (() => {
+  let PORT = process.env.PORT 
   let app = express();
   let server = http.createServer(app)
   let io = socketioServer(server);
@@ -244,22 +226,98 @@ api = (() => {
 
 // ## TESTING
 if (process.env.NODE_ENV === 'TESTING') (() => {
+
+  // %% mock
+  mock = (() => {
+    let socketCreate = function(){
+      return new Promise((data, err) =>{
+        let PORT = process.env.PORT 
+        let socket = socketioClient('http://localhost:' + PORT)
+        this.tempSocket = socket
+        socket.on('/r/connect', (state) => (socket.state = state) && data(socket))
+        socket.on('error', err)
+      })
+    }
+    let socketDelete = function(){
+        this.tempSocket.close()
+        return Promise.resolve()
+    }
+    return {socketCreate, socketDelete}
+  })()
+
+  describe('testing f', function(){
+    it('should compose two functions', () =>{
+      let addFiveTimesTen = f.compose(num => num * 10, num => num + 5)
+      expect(addFiveTimesTen(1)).toEqual(60)
+      let capsAndTrim = f.compose(s => s.trim(), s => s.toUpperCase())
+      expect(capsAndTrim(' hello ')).toEqual('HELLO')
+    })
+    it('should create a partial', () =>{
+      let add = (a, b) => a + b 
+      let addTen = f.partial(add, 10)
+      expect(addTen(2)).toEqual(12)
+    })
+    it('should map an array', () =>{
+      let result = f.map([1,2,3], (n, i, a) => n + i + a.length)
+      expect(result).toEqual([4,6,8])
+    })
+    it('should filter an array', () =>{
+      let result = f.filter([1,2,3,4,5,6], (n) => n % 2 == 0 )
+      expect(result).toEqual([2,4,6])
+    })
+    it('should reudce an array', () =>{
+      let result = f.reduce([1,2,3], (p, n) => p + n)
+      expect(result).toEqual(6)
+    })
+    it('should forEach an array', () =>{
+      let data = []
+      let result = f.forEach([1,2,3], (n) => data.push(n))
+      expect(result).toEqual(undefined)
+      expect(data).toEqual([1,2,3])
+    })
+    it('should each an array', () =>{
+      let data = []
+      let result = f.each([1,2,3], (n) => data.push(n))
+      expect(result).toEqual(true)
+      expect(data).toEqual([1,2,3])
+    })
+    it('should concat an array', () =>{
+      let result = f.concat([3], [4,5])
+      expect(result).toEqual([3,4,5])
+    })
+  })
   describe('testing world', function(){
     before(api.start)
     after((done) => api.stop().then(done()))
+    describe('mock socket', function(){
+      before(mock.socketCreate.bind(this))
+      after(mock.socketDelete.bind(this))
+      it('should resolve a world', () => {
+        expect(this.tempSocket.state.id).toExist()
+      })
+    })
     describe('/q/read/world', function(){
-      it('should resolve a world', (done) => {
-        mock.socket()
-        .then(s => util.request(s, '/q/read/world'))
+      before(mock.socketCreate.bind(this))
+      after(mock.socketDelete.bind(this))
+      it('should resolve a world', () => {
+        util.request(this.tempSocket, '/q/read/world')
         .then(res => {
           expect(res.status).toEqual(200)
           expect(res.data.id).toExist()
           expect(res.data.title).toExist()
           expect(res.data.width).toEqual(25)
           expect(res.data.height).toEqual(25)
-          done()
+          this.tempWorld = res.data;
         })
-        .catch(done)
+      })
+      it('should resolve the same world', () => {
+        util.request(this.tempSocket, '/q/read/world')
+        .then(res => {
+          expect(res.status).toEqual(200)
+          expect(res.data.title).toEqual(this.tempWorld.title)
+          expect(res.data.width).toEqual(25)
+          expect(res.data.height).toEqual(25)
+        })
       })
     })
   })
