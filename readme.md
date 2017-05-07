@@ -2,8 +2,6 @@
 
 2d top down 
 multiplayer 
-chat
-scriptable 
 
 # SAP
 model small empty world 
@@ -26,12 +24,6 @@ _player_0.0
 /read/player
 x, y position
 _name (random ipsum) 
-
-- verbs
-D del 
-R red
-C cre
-U upd
 
 API
 * game author
