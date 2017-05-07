@@ -1,1 +1,2 @@
-require('./lib/api').start()
+require('./lib/api')
+api.start()
