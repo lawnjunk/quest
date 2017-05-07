@@ -1,0 +1,28 @@
+@import url('https://fonts.googleapis.com/css?family=Lato');
+
+$color-primary: beige;
+$color-secondary: #88c3e0;
+$color-error: #ff7a7a;
+$color-success: #4f7;
+$color-black: #000025;
+$color-darkgrey: #333;
+$color-grey: #777;
+$color-lightgrey: #aaa;
+$color-white: #fff;
+
+$pad: 0.5em;
+
+$font-primary: 'Lato', sans-serif;
+$font-secondary: monospace;
+
+@mixin border-primary {
+  border: 1px solid $color-grey;
+}
+
+@mixin border-secondary {
+  border: 1px solid $color-secondary;
+}
+
+.clearfix {
+  clear: both;
+}

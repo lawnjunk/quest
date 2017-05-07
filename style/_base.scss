@@ -1,0 +1,119 @@
+@import "./_vars.scss";
+
+* {
+  width: 100%;
+  box-sizing: border-box;
+  border: none;
+  outline: none;
+  &:focus {
+    border: none;
+    outline: none;
+  }
+}
+
+html {font-size: 1em;}
+
+body {
+  font-family: $font-primary;
+  font-weight: 400;
+  line-height: 1.45;
+  color: $color-darkgrey;
+}
+
+
+h1, h2, h3, h4 {
+  font-weight: inherit;
+  line-height: 1.2;
+}
+
+h1 {
+  font-size: 2.441em;
+}
+
+h2 {font-size: 1.953em;}
+
+h3 {font-size: 1.563em;}
+
+h4 {font-size: 1.25em;}
+
+input, button, pre, textarea, select {
+  padding: $pad;
+}
+
+input {
+  @include border-primary;
+
+  &:focus {
+    @include border-secondary;
+  }
+}
+
+
+a {
+  font-weight: bolder;
+  text-decoration: underline;
+  color: $color-secondary;
+
+  &:hover {
+    color: $color-grey;
+  }
+
+  &:visited {
+    color: $color-error;
+  }
+
+}
+
+button, input[type="submit"] {
+  background: $color-secondary;
+  @include border-secondary;
+  border-width: 2px;
+  border-radius: $pad / 2;
+  font-weight: bold;
+
+  &:hover, &:focus {
+    background: $color-lightgrey;
+    border-color: $color-lightgrey;
+  }
+
+  &:active {
+    background: $color-grey;
+    border-color: $color-grey;
+  }
+
+  &:disabled {
+    color: $color-grey;
+    background: $color-lightgrey;
+    border-color: $color-grey;;
+  }
+}
+
+strong {
+  font-weight: bolder;
+}
+
+em {
+  font-style: italic;
+}
+
+ul, ol {
+  margin-left: $pad * 2;
+  padding-left: $pad * 2;
+  color: $color-black;
+
+  ul {
+    list-style: circle;
+  }
+
+  ol {
+    list-style: lower-roman;
+  }
+}
+
+ul {
+  list-style: initial;
+}
+
+ol {
+  list-style: decimal;
+}
