@@ -10,10 +10,13 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "colors": "^1.1.2",
+    "cors": "^2.8.3",
     "debug": "^2.6.6",
     "expect": "^1.20.2",
     "express": "^4.15.2",
     "mocha": "^3.3.0",
+    "morgan": "^1.8.1",
     "socket.io": "^1.7.3",
     "uuid": "^3.0.1"
   }
