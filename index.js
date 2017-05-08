@@ -54,7 +54,9 @@ f = (() => {
   let each = compose(() => true, forEach)
   let list = (n, cb) => map(new Array(n).fill(null), cb)
   let go = (...list) => reduce([...list], (prev, cb) => cb(), null)
-  return { map, filter, reduce, concat, slice, compose, partial, forEach, each, list, go}
+  let append = (list, ...items) => list.concat([...items])
+  let prepend = (list, ...items) => [...items].concat(list)
+  return { map, filter, reduce, concat, slice, compose, partial, forEach, each, list, go, append, prepend}
 })()
 
 // %% util
@@ -76,9 +78,11 @@ util = (() => {
     log_cache = console.timeEnd(log_count - 1)
   }
   let log = (...args) =>{
-    process.stdout.write(['=='.green, ...args, '== '.green].join(' '))
+    let msg = ['=='.green, ...args, '== '.green].join(' ')
+    process.stdout.write(msg)
     log_stop()
     log_start()
+    return msg
   }
   console.time(log_count - 1)
   log('log start')
@@ -105,22 +109,23 @@ util.request = (client, path, body) =>{
 }
 
 // %% store
-store = (() => {
+createStore = (() => {
   let hooks = {pre: [], post: []}
   let state = {}
   let hookPush = (type, cb) => hooks[type].push(cb)
   let getState = () => state
   let runHooks = type => f.each(hooks[type], cb => cb(state))
-  let setState = change => runHooks('pre') && (state = change) && runHooks('post')
+  let setState = change => runHooks('pre') && (state = change(state)) && runHooks('post')
   let updateState = change =>
   runHooks('pre') &&
     (state = Object.assign(state, change(state))) &&
     runHooks('post')
   return { hookPush, getState, updateState , setState}
-})()
-store.setState({
-  connections: [],
 })
+store = createStore()
+store.setState(s => ({
+  connections: [],
+}))
 
 // %% ipsum
 ipsum = (() =>{
@@ -284,6 +289,100 @@ if (process.env.NODE_ENV === 'TESTING') (() => {
     it('should concat an array', () =>{
       let result = f.concat([3], [4,5])
       expect(result).toEqual([3,4,5])
+    })
+    it('should append a numbers', () =>{
+      let result = f.append([1,2,3], 4, 5, 6)
+      expect(result).toEqual([1,2,3,4,5,6])
+    })
+    it('should prepend a numbers', () =>{
+      let result = f.prepend([1,2,3], 4, 5, 6)
+      expect(result).toEqual([4,5,6,1,2,3])
+    })
+    it('should slice an array', () =>{
+      let result = f.slice([0,1,2,3,4], 1, 4)
+      expect(result).toEqual([1,2,3])
+    })
+    it('should list should create an array', () => {
+      let result = f.list(5, (_, i) => i)
+      expect(result).toEqual([0,1,2,3,4])
+    })
+    it('it should return the last result', () =>{
+      let a, b, c;
+      let result = f.go(
+        () => a = 0,
+        () => b = 1,
+        () => c = 2,
+        () => 'hello'
+      )
+      expect(a).toEqual(0)
+      expect(b).toEqual(1)
+      expect(c).toEqual(2)
+      expect(result).toEqual('hello')
+    })
+  })
+  describe('tesing util', function(){
+    it('util.hash should return a hash', () =>{
+      let result = util.hash()
+      expect(typeof result).toEqual('string')
+      expect(result.length).toEqual(16)
+    })
+    it('util.log should return a msg', () =>{
+      let result = util.log('hello', 'world')
+      expect(result).toEqual(['=='.green, 'hello', 'world', '== '.green].join(' '))
+    })
+    it('util.safely should not throw ', () =>{
+      let dangerous = () => {throw 'hello'}
+      expect(dangerous).toThrow()
+      expect(f.partial(util.safely, dangerous)).toNotThrow()
+    })
+    it('util.random should return a number', ()=>{
+      let result = util.random(10, 100)
+      expect(typeof result).toEqual('number')
+      expect(result).toBeLessThan(100)
+      expect(result).toBeGreaterThan(9)
+    })
+  })
+  describe('testing store', function(){
+    it('createStore should return a store', () => {
+      let store = createStore();
+      expect(store.setState).toExist()
+      expect(store.getState).toExist()
+      expect(store.updateState).toExist()
+      expect(store.hookPush).toExist()
+      expect(store.getState()).toEqual({})
+    })
+    it('store.updateState should update the store state', ()=>{
+      let store = createStore();
+      expect(store.getState()).toEqual({})
+      store.updateState(s => ({title: 'hah'}))
+      expect(store.getState()).toEqual({title: 'hah'})
+      store.updateState(s => ({cool: 'lul'}))
+      expect(store.getState()).toEqual({title: 'hah', cool: 'lul'})
+      store.updateState(s => ({title: 'a'}))
+      expect(store.getState()).toEqual({title: 'a', cool: 'lul'})
+    })
+    it('store.setState should set the store state', ()=>{
+      let store = createStore();
+      expect(store.getState()).toEqual({})
+      store.setState(s => ({title: 'hah'}))
+      expect(store.getState()).toEqual({title: 'hah'})
+      store.setState(s => ({cool: 'lul'}))
+      expect(store.getState()).toEqual({cool: 'lul'})
+    })
+    it('store.hookPush should add pre and post hooks', ()=>{
+      let calls = 0;
+      let store = createStore();
+      let last = {}
+      let next = {a: '1'}
+      store.hookPush('pre', s => calls++ && expect(s).toEqual(last))
+      store.hookPush('pre', s => calls++ && expect(s).toEqual(last))
+      store.hookPush('post', s => calls++ && expect(s).toEqual(next))
+      store.hookPush('post', s => calls++ && expect(s).toEqual(next))
+      store.setState(s => next)
+      last = next
+      next = {b: '2'}
+      store.setState(s => next)
+      expect(calls).toEqual(8)
     })
   })
   describe('testing world', function(){

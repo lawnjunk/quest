@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
+    "test-watch": "NODE_ENV='TESTING' ./node_modules/mocha/bin/mocha -w ./index.js",
     "test": "NODE_ENV='TESTING' ./node_modules/mocha/bin/mocha ./index.js"
   },
   "keywords": [],
