@@ -14,17 +14,12 @@
 // load env
 // import dependencies
 // define modules
-// * f
-// * util
-// * store 
-// * ipsum 
-// * world 
-// * router
-// * api
 // export api
 // test modules
 // * mock 
 // tests 
+
+// ## DEV
 
 // %% load env
 require('dotenv').config()
@@ -65,7 +60,11 @@ util = (() => {
   let hash = () => crypto.randomBytes(8).toString('hex')
   let randomBelow = (num) => Math.floor(Math.random() * num)
   let random = (offset, scale) =>
-  f.compose(num => num + offset, f.partial(randomBelow, scale - offset))()
+    f.compose(num => num + offset, f.partial(randomBelow, scale - offset))()
+  let reload = () => {
+    delete require.cache[require.resolve('./index.js')]
+    return require('./index.js')
+  }
   let log_count = 1
   let log_isStop = true
   let log_cache = console.time('start')
@@ -86,7 +85,7 @@ util = (() => {
   }
   console.time(log_count - 1)
   log('log start')
-  return {log, safely, hash, random}
+  return {log, safely, hash, random, reload}
 })()
 util.request = (client, path, body) =>{
   return new Promise((data, err) => {
@@ -146,26 +145,26 @@ ipsum = (() =>{
 
 // %% location 
 location = (() => {
-  let create = (data) => ({
+  let locationCreate = (data) => ({
     z: 0,
     x: data.x,
     y: data.y,
     id: util.hash(),
     name: ipsum.location(),
   })
+  let create = (s, data, send) =>{
+    if(data.x === undefined || data.y === undefined) return send({status: 400})
+    data.x %=  Number(process.env.WORLD_WIDTH)
+    data.y %=  Number(process.env.WORLD_HEIGHT)
+    let locations = store.getState().locations
+    let result = locations[data.y][data.x]
+    if(result) return send({status: 200, data: result})
+    let updateLocations = Object.assign(locations)
+    data = updateLocations[data.y][data.y] = locationCreate(data)
+    store.updateState(s => {locations: updateLocations})
+    send({status: 200, data: data})
+  }
   return {create}
-})()
-
-// %% world
-world = (() =>{
-  let create = () => ({
-    id: util.hash(),
-    title: ipsum.world(),
-    width: process.env.WORLD_WIDTH,
-    height: process.env.WORLD_HEIGHT,
-  })
-  let validate = w => !!w.id && !!w.title && !!w.width && !!w.height
-  return {create, validate}
 })()
 
 // %% router
@@ -189,30 +188,7 @@ router = (() =>{
   }
   return {on, initConnection}
 })()
-router.on('/read/world', (s, data, send) =>{
-  if(s.state.world) return send({status: 200, data: s.state.world})
-  data = s.state.world = world.create()
-  send({status: 200, data})
-})
-router.on('/update/world', (s, data, send) =>{
-  if(data && world.validate(data)){
-    s.state.world = data;
-    send({status: 200, data})
-  }
-  return send({status: 400})
-})
-router.on('/create/location', (s, data, send) =>{
-  if(data.x === undefined || data.y === undefined) return send({status: 400})
-  data.x %=  Number(process.env.WORLD_WIDTH)
-  data.y %=  Number(process.env.WORLD_HEIGHT)
-  let locations = store.getState().locations
-  let result = locations[data.y][data.x]
-  if(result) return send({status: 200, data: result})
-  let updateLocations = Object.assign(locations)
-  data = updateLocations[data.y][data.y] = location.create(data)
-  store.updateState(s => {locations: updateLocations})
-  send({status: 200, data: data})
-})
+router.on('/create/location', location.create)
 
 // %% api
 api = module.exports = (() => {
@@ -424,52 +400,6 @@ if (process.env.NODE_ENV === 'TESTING') (() => {
       after(mock.socketDelete.bind(this))
       it('should resolve a world', () => {
         expect(this.tempSocket.state.id).toExist()
-      })
-    })
-    describe('/read/world', function(){
-      before(mock.socketCreate.bind(this))
-      after(mock.socketDelete.bind(this))
-      it('/read/world should resolve a world', () => {
-        return util.request(this.tempSocket, '/read/world')
-        .then(res => {
-          expect(res.status).toEqual(200)
-          expect(res.data.id).toExist()
-          expect(res.data.title).toExist()
-          expect(res.data.width).toEqual(25)
-          expect(res.data.height).toEqual(25)
-          this.tempWorld = res.data;
-        })
-      })
-      it('/read/world/ should resolve the same world', () => {
-        return util.request(this.tempSocket, '/read/world')
-        .then(res => {
-          expect(res.status).toEqual(200)
-          expect(res.data.title).toEqual(this.tempWorld.title)
-          expect(res.data.width).toEqual(25)
-          expect(res.data.height).toEqual(25)
-        })
-      })
-      it('valid /update/world should replace the world', () => {
-        let update = world.create()
-        return util.request(this.tempSocket, '/update/world', update)
-        .then(res => {
-          expect(res.status).toEqual(200)
-          expect(res.data.title).toEqual(update.title)
-          expect(res.data.width).toEqual(25)
-          expect(res.data.height).toEqual(25)
-        })
-      })
-      it('invalid /update/world should 400 error', () => {
-        return util.request(this.tempSocket, '/update/world')
-        .catch(res => {
-          expect(res.status).toEqual(400)
-        })
-      })
-      it('invalid /update/world should 400 error', () => {
-        return util.request(this.tempSocket, '/update/world', {})
-        .catch(res => {
-          expect(res.status).toEqual(400)
-        })
       })
     })
     describe('testing location', function(){
