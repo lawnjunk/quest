@@ -90,21 +90,10 @@ util = (() => {
 })()
 util.request = (client, path, body) =>{
   return new Promise((data, err) => {
-    let responsePath = path.replace('/q/', '/r/')
-    let responseHandler = (res) => {
-      client.removeListener(responsePath, responseHandler)
-      client.removeListener('error', errorHandler)
-      if(res.status > 299) return err(res)
-        data(res)
-    }
-    let errorHandler = (res) => {
-      client.removeListener(responsePath, responseHandler)
-      client.removeListener('error', errorHandler)
-      err(res)
-    }
-    client.on(responsePath, responseHandler)
-    client.on('error', errorHandler)
-    client.emit(path, body)
+    client.emit(path, body, (response) => {
+      if(response.status > 299) return err(response)
+      data(response)
+    })
   })
 }
 
@@ -177,25 +166,25 @@ router = (() =>{
       for(let path in routes){
         let cb = routes[path]
         util.log('adding on', path, 'to', s.state.id)
-        s.on(path, (...args) => {
-          let result = cb(s, ...args)
-          s.emit(path.replace('/q/', '/r/'), result)
+        s.on(path, (arg, send) => {
+          util.log('hit', path, arg)
+          return cb(s, arg, send)
         })
       }
       s.emit('/r/connect', s.state)
   }
   return {on, initConnection}
 })()
-router.on('/q/read/world', (s) => {
-  if(s.state.world) return {status: 200, data: s.state.world}
-  let data = s.state.world = world.create()
-  return {status: 200, data}
+router.on('/q/read/world', (s, data, send) => {
+  if(s.state.world) return send({status: 200, data: s.state.world})
+  data = s.state.world = world.create()
+  send({status: 200, data})
 })
-router.on('/q/update/world', (s, data) => {
+router.on('/q/update/world', (s, data, send) => {
   util.log('/q/update/world', data)
   if(data && world.validate(data)){
     s.state.world = data;
-    return  {status: 200, data}
+    send({status: 200, data})
   }
   return {status: 400}
 })
@@ -416,7 +405,7 @@ if (process.env.NODE_ENV === 'TESTING') (() => {
       before(mock.socketCreate.bind(this))
       after(mock.socketDelete.bind(this))
       it('should resolve a world', () => {
-        util.request(this.tempSocket, '/q/read/world')
+        return util.request(this.tempSocket, '/q/read/world')
         .then(res => {
           expect(res.status).toEqual(200)
           expect(res.data.id).toExist()
@@ -427,7 +416,7 @@ if (process.env.NODE_ENV === 'TESTING') (() => {
         })
       })
       it('should resolve the same world', () => {
-        util.request(this.tempSocket, '/q/read/world')
+        return util.request(this.tempSocket, '/q/read/world')
         .then(res => {
           expect(res.status).toEqual(200)
           expect(res.data.title).toEqual(this.tempWorld.title)
