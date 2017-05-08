@@ -385,6 +385,23 @@ if (process.env.NODE_ENV === 'TESTING') (() => {
       expect(calls).toEqual(8)
     })
   })
+  describe('testing ipsum', function(){
+    it('ipsum.world should return a string', () => {
+      let result = ipsum.world()
+      expect(result.split(' ').length).toBeGreaterThan(2)
+      expect(result.split(' ').length).toBeLessThan(5)
+    })
+    it('ipsum.location should return a string', () => {
+      let result = ipsum.location()
+      expect(result.split(' ').length).toBeGreaterThan(0)
+      expect(result.split(' ').length).toBeLessThan(4)
+    })
+    it('ipsum.player should return a string', () => {
+      let result = ipsum.player()
+      expect(result.split(' ').length).toBeGreaterThan(0)
+      expect(result.split(' ').length).toBeLessThan(3)
+    })
+  })
   describe('testing world', function(){
     before(api.start)
     after((done) => api.stop().then(done()))
