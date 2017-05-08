@@ -41,6 +41,16 @@ f = (() => {
   let compose = (a, b) => (...args) => a(b(...args))
   let partial = (cb, ...data) => (...args) =>
     cb.apply(null, [...data].concat([...args]))
+  let copy = (item) => {
+    let result = {}
+    for(let key in item){
+      if(typeof item[key] === 'object')
+        result[key] = copy(item[key])
+      else
+        result[key] = item[key]
+    }
+    return result
+  }
   let reducerCreate = name =>
     (l, ...args) => Array.prototype[name].apply(l, [...args])
   let reducers = ['map', 'filter', 'reduce', 'concat', 'slice', 'forEach']
@@ -51,7 +61,8 @@ f = (() => {
   let go = (...list) => reduce([...list], (prev, cb) => cb(), null)
   let append = (list, ...items) => list.concat([...items])
   let prepend = (list, ...items) => [...items].concat(list)
-  return { map, filter, reduce, concat, slice, compose, partial, forEach, each, list, go, append, prepend}
+  return { map, filter, reduce, concat, slice, compose, partial, 
+           forEach, each, list, go, append, prepend, copy}
 })()
 
 // %% util
@@ -96,27 +107,6 @@ util.request = (client, path, body) =>{
   })
 }
 
-// %% store
-createStore = (() => {
-  let hooks = {pre: [], post: []}
-  let state = {}
-  let hookPush = (type, cb) => hooks[type].push(cb)
-  let getState = () => state
-  let runHooks = type => f.each(hooks[type], cb => cb(state))
-  let setState = change => runHooks('pre') && (state = change(state)) && runHooks('post')
-  let updateState = change =>
-  runHooks('pre') &&
-    (state = Object.assign(state, change(state))) &&
-    runHooks('post')
-  return { hookPush, getState, updateState , setState}
-})
-store = createStore()
-store.setState(s => ({
-  connections: [],
-  locations: f.list(Number(process.env.WORLD_HEIGHT), () => 
-                f.list(Number(process.env.WORLD_WIDTH), () => null)),
-}))
-
 // %% ipsum
 ipsum = (() =>{
   let vocbulary = {
@@ -143,6 +133,34 @@ ipsum = (() =>{
   return {world, player, location}
 })()
 
+// %% store
+createStore = (() => {
+  let hooks = {pre: [], post: []}
+  let state = {}
+  let hookPush = (type, cb) => hooks[type].push(cb)
+  let getState = () => state
+  let runHooks = type => f.each(hooks[type], cb => cb(state))
+  let setState = change => runHooks('pre') && (state = change(state)) && runHooks('post')
+  let updateState = change =>
+  runHooks('pre') &&
+    (state = Object.assign(state, change(state))) &&
+    runHooks('post')
+  return { hookPush, getState, updateState , setState}
+})
+store = createStore()
+store.setState(s => ({
+  connections: [],
+  world: {
+    id: util.hash(),
+    title: ipsum.world(),
+    width: Number(process.env.WORLD_WIDTH),
+    height: Number(process.env.WORLD_HEIGHT),
+  },
+  locations: f.list(Number(process.env.WORLD_HEIGHT), (_, y ) => 
+                f.list(Number(process.env.WORLD_WIDTH), (_, x) => ({
+                  y, x, z: 0, players: [], id: util.hash(), name: ipsum.location()
+                })))}))
+
 // %% location 
 location = (() => {
   let locationCreate = (data) => ({
@@ -152,19 +170,20 @@ location = (() => {
     id: util.hash(),
     name: ipsum.location(),
   })
-  let create = (s, data, send) =>{
+  let read = (s, data, send) =>{
     if(data.x === undefined || data.y === undefined) return send({status: 400})
     data.x %=  Number(process.env.WORLD_WIDTH)
     data.y %=  Number(process.env.WORLD_HEIGHT)
-    let locations = store.getState().locations
+    let locations = f.copy(store.getState().locations)
+    let oldLocation = locations[s.state.location.x][s.state.location.y]
+    oldLocation.players = f.filter(oldLocation.players, p => p.id != s.state.id)
     let result = locations[data.y][data.x]
-    if(result) return send({status: 200, data: result})
-    let updateLocations = Object.assign(locations)
-    data = updateLocations[data.y][data.y] = locationCreate(data)
-    store.updateState(s => {locations: updateLocations})
-    send({status: 200, data: data})
+    s.state.location = f.copy(result)
+    result.players.push(f.copy(s.state))
+    store.updateState(s => {locations})
+    return send({status: 200, data: result})
   }
-  return {create}
+  return {read}
 })()
 
 // %% router
@@ -175,7 +194,11 @@ router = (() =>{
     util.log('initConnection', routes)
     store.updateState(past =>({
       connections: f.concat(past.connections, [s])}))
-      s.state = {id: util.hash()}
+      s.state = {
+        id: util.hash(),
+        name: ipsum.player(), 
+        location: f.copy(store.getState().locations[0][0])
+      }
       for(let path in routes){
         let cb = routes[path]
         util.log('adding on', path, 'to', s.state.id)
@@ -188,7 +211,7 @@ router = (() =>{
   }
   return {on, initConnection}
 })()
-router.on('/create/location', location.create)
+router.on('/read/location', location.read)
 
 // %% api
 api = module.exports = (() => {
@@ -405,8 +428,8 @@ if (process.env.NODE_ENV === 'TESTING') (() => {
     describe('testing location', function(){
       before(mock.socketCreate.bind(this))
       after(mock.socketDelete.bind(this))
-      it('/create/location should resolve a location', () => {
-        return util.request(this.tempSocket, '/create/location', {x: 0, y: 0})
+      it('/read/location should resolve a location', () => {
+        return util.request(this.tempSocket, '/read/location', {x: 0, y: 0})
         .then(res => {
           expect(res.status).toEqual(200)
           expect(res.data.x).toEqual(0)
@@ -415,9 +438,10 @@ if (process.env.NODE_ENV === 'TESTING') (() => {
           this.tempLocation = res.data;
         })
       })
-      it('/create/location should resolve a location', () => {
-        return util.request(this.tempSocket, '/create/location', {x: 0, y: 0})
+      it('/read/location should resolve a location', () => {
+        return util.request(this.tempSocket, '/read/location', {x: 25, y: 25})
         .then(res => {
+          console.log('res.data', res.data)
           expect(res.status).toEqual(200)
           expect(res.data.x).toEqual(0)
           expect(res.data.y).toEqual(0)
